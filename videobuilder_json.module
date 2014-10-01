@@ -1,0 +1,90 @@
+<?php
+
+/* 
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+
+/**
+ * Implementing hook_menu();
+ */
+function videobuilder_json_menu() {
+  $items['videobuilder_json/%'] = array(
+    'title' => 'videobuilder_json_Recursive',
+    'page callback' => 'videobuilder_json_page',
+    'page arguments' => array(1,),
+    'access arguments' => array('access content'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/**
+ * A menu callback for pages that only want to display JSON.
+ */
+function videobuilder_json_page($entity_id = '3', $entity_type = 'cylexvideo', $langcode = NULL) {
+
+  $fieldcollection = videobuilder_json_load_entity($entity_id, $entity_type);
+  if ($fieldcollection === NULL) {
+    drupal_not_found();
+  }
+  else {
+    drupal_json_output($fieldcollection);
+    drupal_exit();
+  }
+}
+
+function videobuilder_json_load_entity($entity, $entity_type) {
+  $return = array();
+  $recursive_entity_type = 'field_collection_item';
+  
+  if (is_numeric($entity)) {
+    $entities = entity_load($entity_type, array($entity));
+    if (empty($entities)) {
+      return NULL;
+    }
+    $entity = $entities[$entity];
+  }
+  elseif (!is_object($entity)) {
+    return FALSE;
+  }
+
+  $wrapper = entity_metadata_wrapper($entity_type, $entity);
+  $bundle = $wrapper->getBundle();
+
+  $property_info = entity_get_property_info($entity_type);
+  foreach ($property_info['properties'] as $property => $property_data) {
+    $value = $wrapper->{$property}->raw();
+    if (!is_object($value)) {
+      $return[$property] = $value;
+    }
+  }
+
+  $fields = field_info_instances($entity_type, $bundle);
+  foreach ($fields as $field_name => $field) {
+
+    $field_info = field_info_field($field_name);
+    if ($field_info['type'] == 'field_collection') {
+      $collection = $wrapper->{$field_name}->raw();
+     
+      if ($collection != NULL) {
+        if (is_object($collection)) {
+          $item_id = $collection->item_id;
+          $return[$field_name][$item_id] = videobuilder_json_load_entity($collection, $recursive_entity_type);
+        }
+        elseif (is_array($collection) && !empty($collection)) {
+          $item_values = array();
+          foreach ($collection as $item_id) {
+            $item_values[$item_id] = videobuilder_json_load_entity($item_id, $recursive_entity_type);
+          }
+          $return[$field_name] = $item_values;
+        }
+      }
+    }
+    else {
+      $return[$field_name] = $wrapper->{$field_name}->raw();
+    }
+  }
+  return $return;
+}

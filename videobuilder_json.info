@@ -1,0 +1,5 @@
+name = Cylex VideoBuilder JSON Generate
+description = Allows generating a JSON from a cylexvideo entity
+core = 7.x
+package = PbcCustom
+version = "7.x-1.0"
